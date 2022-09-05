@@ -33,7 +33,9 @@ class hypervol_solver():
 
     def build_front(self):
         y = self.pareto_ranking(self.y_vec)
-        arg_v = np.argsort(y)[:MIU_SIZE]
+        front_size = len(y) - np.count_nonzero(y)  #sanity 
+        arg_v = np.argsort(y)[:front_size]
+
         miu_y = self.y_vec[arg_v]  
         miu_x = self.x_vec[arg_v]
 
@@ -65,10 +67,17 @@ class hypervol_solver():
         dim = reference_point.shape[0]#volume to be filled 
         no_border = np.copy(self.front[1])
 
-        for m in range (dim):
-            no_border = np.delete(no_border, np.argmax(self.front[1][:,m]), axis=0) #removing from group the border points, contribute 0 volume 
+        # for m in range (dim):
+        #     no_border = np.delete(no_border, np.argmax(self.front[1][:,m]), axis=0) #removing from group the border points, contribute 0 volume 
+
+        vols_inclus = []    
+        if dim == 2 :
+            print('e)')
+            vols_by_y = no_border[no_border[:, 1].argsort()]
+            for i in range (1, len(vols_by_y)-1):
+                print('r')
         
-        vols_inclus = []
+        
         for p in no_border :
             vols_inclus.append(self.inclusive(reference_point, p))
         return (sum(vols_inclus))    
