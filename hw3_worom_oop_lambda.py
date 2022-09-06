@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 
 MIU_SIZE = 50 
 EPS = 0.003
-U_BOUND = 5
-L_BOUND = -5
+U_BOUND = 2
+L_BOUND = -1
 DIM = 80
 
 class hypervol_solver():
@@ -52,6 +52,8 @@ class hypervol_solver():
 
     def solve(self):
         self.build_front()
+        #plt.scatter(self.y_vec[:,0], self.y_vec[:,1])
+        #plt.scatter(self.front[1][:,0], self.front[1][:,1])
 
         # while (len(self.front) < MIU_SIZE) : #we should remain only with front points 
         #     self.iterate()
@@ -64,21 +66,43 @@ class hypervol_solver():
 
     def hypervol (self):
         reference_point = self.init_dystopia()  #ref point is the worse x,y,(z) of all miu 
+        
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111)        
+        ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
+        ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
+        ax1.scatter(reference_point[0], reference_point[1], color = 'red')
+        plt.show()
+        
         dim = reference_point.shape[0]#volume to be filled 
-        no_border = np.copy(self.front[1])
+        front_by_y = np.copy(self.front[1])
 
         # for m in range (dim):
-        #     no_border = np.delete(no_border, np.argmax(self.front[1][:,m]), axis=0) #removing from group the border points, contribute 0 volume 
+        #     front_by_y = np.delete(front_by_y, np.argmax(self.front[1][:,m]), axis=0) #removing from group the border points, contribute 0 volume 
 
         vols_inclus = []    
         if dim == 2 :
             print('e)')
-            vols_by_y = no_border[no_border[:, 1].argsort()]
+            idexs = front_by_y[:, 1].argsort()
+            vols_by_y = front_by_y[idexs]
+            differences = np.diff(vols_by_y,axis = 0)
+            contributions = np.abs(differences[:-1, 0] * differences[1:, 1])
+            np.delete(self.front[1], idexs[np.argmin(contributions)+1])
+            np.delete(self.front[0], idexs[np.argmin(contributions)+1])
+
             for i in range (1, len(vols_by_y)-1):
                 print('r')
         
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111)        
+        ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
+        ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
+        ax1.scatter(reference_point[0], reference_point[1], color = 'red')
+        plt.show()
+
+
         
-        for p in no_border :
+        for p in front_by_y :
             vols_inclus.append(self.inclusive(reference_point, p))
         return (sum(vols_inclus))    
         #TODO how to detecet overlap 
@@ -104,14 +128,15 @@ class hypervol_solver():
 
     def init_dystopia(self) : #any dimensional
         miu = np.copy(self.front[1])
-        dim = miu[0].shape[0]
+        dim = len(self.funcs) # miu[0].shape[0]  #WHY NOT JUST 
+
         dystopia = np.full(dim,np.inf)
         for m in range(dim) :
-            dystopia[m] = np.max(miu[:,m]) 
-        return dystopia
+            dystopia[m] = np.max(miu[:,m]) #CHANGED MIU TO Y_VEC
+        return dystopia #DO I NEED TO MAKE A COPY OF Y_VEC?
 
     def pareto_ranking(self, ObjFncVectors) :  #any dimensional
-        ranking = np.zeros(len(ObjFncVectors))
+        ranking = np.zeros(len(ObjFncVectors)) #WHY NOT JUST SELF.Y_VEC.shape[0]?? ""^
         for idx in range(len(ObjFncVectors)): #dominating vec 
             for idx2 in range(len(ObjFncVectors)): #dominated vec 
                 if np.all(ObjFncVectors[idx,:] <= ObjFncVectors[idx2,:]) \
@@ -121,21 +146,16 @@ class hypervol_solver():
 
 
 
-    
-f1 = lambda x1,x2 : x1 ** 2 + (x2 - 0.5) ** 2#$
-f2 = lambda x1,x2 : (x1 - 1) ** 2 + (x2 - 0.5) ** 2#$ implementation specific 
-
-
 
 # solve for n = 80
 f1_1 = lambda x1 : np.dot(x1.T , x1) # minimize
 f1_2 = lambda x1 : np.dot((x1-1).T, x1-1) # minimize
 
-# Q = np.matrix #covariance matrix nxn of portfolio investments       #given as input
-# rho = np.vector #expected return on investment vect n               #given as input
-# f2_risk = lambda x, Q : np.dot( np.dot(x.T,Q) , x) # minimize
-# f2_return = lambda x, rho: np.dot(x.T , rho) #MAXIMIZE
-# f2_B = lambda x : np.sum(x)
+# Q = covariance matrix nxn of portfolio investments       #given as input
+# rho = expected return on investment vect n               #given as input
+f2_risk = lambda x, Q : np.dot( np.dot(x.T,Q) , x) # minimize
+f2_return = lambda x, rho: np.dot(x.T , rho) #MAXIMIZE
+f2_B = lambda x : np.sum(x)
 
 # solve for n = 30
 f3_1 = lambda x1 : np.dot(x1.T , x1) # minimize
