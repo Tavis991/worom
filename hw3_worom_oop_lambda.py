@@ -26,14 +26,13 @@ class hypervol_solver():
         # res = np.stack((evaluated_f1_sp, evaluated_f2_sp), axis=1)
     
     def evaluation (self, x_vec):
-        #x_vec = np.array([x_vec[y] for y in range (DIM)])
         y_vec = np.array([[self.funcs[i](x_vec[j]) for j in range \
              (x_vec.shape[0])] for i in range (len(self.funcs))] ).T
         return y_vec
 
     def build_front(self):
         y = self.pareto_ranking(self.y_vec)
-        front_size = len(y) - np.count_nonzero(y)  #sanity 
+        front_size = len(y) - np.count_nonzero(y)   
         arg_v = np.argsort(y)[:front_size]
 
         miu_y = self.y_vec[arg_v]  
@@ -45,24 +44,29 @@ class hypervol_solver():
         
     def iterate(self): 
         for pair in list (itr.combinations(self.front[0], 2)) :
-            np.append(self.front, self.recombine(pair[0],pair[1]))
-            self.y_vec = self.evaluation(self.front[0])
-            self.x_vec = self.front[0]
-            self.build_front()
+           self.front[0] = np.append(self.front[0], self.recombine(pair[0],pair[1]).reshape(1,80), axis=0)
+
+        self.y_vec = self.evaluation(self.front[0])
+        self.x_vec = self.front[0]
+        self.build_front()   
 
     def solve(self):
-        self.build_front()
         #plt.scatter(self.y_vec[:,0], self.y_vec[:,1])
         #plt.scatter(self.front[1][:,0], self.front[1][:,1])
 
         # while (len(self.front) < MIU_SIZE) : #we should remain only with front points 
         #     self.iterate()
+
+        self.build_front()
+   
         diff = np.inf
         vol = 0
-        while (diff > EPS):
+        while (diff > EPS): #stop conditions TODO change 
             vol_n = self.hypervol() #remove least contributor
             diff = vol_n - vol  #add new point, must remain undominated set
             vol = vol_n 
+            self.iterate()
+        return self.front
 
     def hypervol (self):
         reference_point = self.init_dystopia()  #ref point is the worse x,y,(z) of all miu 
@@ -72,39 +76,36 @@ class hypervol_solver():
         ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
         ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
         ax1.scatter(reference_point[0], reference_point[1], color = 'red')
+        plt.pause(1)
         plt.show()
         
         dim = reference_point.shape[0]#volume to be filled 
         front_by_y = np.copy(self.front[1])
-
-        # for m in range (dim):
-        #     front_by_y = np.delete(front_by_y, np.argmax(self.front[1][:,m]), axis=0) #removing from group the border points, contribute 0 volume 
-
-        vols_inclus = []    
+      
         if dim == 2 :
-            print('e)')
+    
             idexs = front_by_y[:, 1].argsort()
             vols_by_y = front_by_y[idexs]
             differences = np.diff(vols_by_y,axis = 0)
             contributions = np.abs(differences[:-1, 0] * differences[1:, 1])
-            np.delete(self.front[1], idexs[np.argmin(contributions)+1])
-            np.delete(self.front[0], idexs[np.argmin(contributions)+1])
+            self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
+            self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
+            contributions = np.abs(differences[:-1, 0] * differences[1:, 1])
 
-            for i in range (1, len(vols_by_y)-1):
-                print('r')
-        
+        return sum(contributions)
         fig = plt.figure()
         ax1 = fig.add_subplot(111)        
         ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
         ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
         ax1.scatter(reference_point[0], reference_point[1], color = 'red')
+        plt.pause(1)
         plt.show()
 
-
-        
-        for p in front_by_y :
-            vols_inclus.append(self.inclusive(reference_point, p))
-        return (sum(vols_inclus))    
+        # ax1.scatter(self.front[1][idexs[np.argmin(contributions)+1]][0], self.front[1][idexs[np.argmin(contributions)+1]][1], color='grey')
+        # vols_inclus = []    
+        # for p in front_by_y :
+        #     vols_inclus.append(self.inclusive(reference_point, p))
+        # return (sum(vols_inclus))    
         #TODO how to detecet overlap 
 
     def inclusive(self, refpoint, point):
@@ -164,27 +165,31 @@ f3_3 = lambda x1 : np.dot((x1-2).T, x1-2) # minimize
 
 funcs = [f1_1,f1_2]
 solver = hypervol_solver(funcs)
-solver.solve()
-diff = solver.y_vec
+front = solver.solve()
+
+print(front[1][np.argmin(np.linalg.norm(front[1]))])
+x = front[0][np.argmin(np.linalg.norm(front[1]))]
+# diff = solver.y_vec
 
 
-while diff < EPS : 
-    #add new point  
-    evaluated_f1_sp = f1(miu[:,0],samples[:,1])  
-    evaluated_f2_sp = f2(samples[:,0],samples[:,1])
-    res = np.stack((evaluated_f1_sp, evaluated_f2_sp), axis=1)
-            #TODO recombination + selection 
-    y = pareto_ranking(res)
-    arg_v = np.argsort(y)[:MIU_SIZE]
-    miu = res[arg_v]
-    reference_point = init_dystopia(res[arg_v])
-    front_size = len(samples) -  np.count_nonzero(y)  
-    for q in front_size :  #calculte vol with and withotu each point 
-        vol = hypervol(miu, front_size)
 
-plt.scatter(evaluated_f1_sp[y > 0], evaluated_f2_sp[y > 0])  
-plt.scatter(evaluated_f1_sp[y == 0], evaluated_f2_sp[y == 0], color='green')
-plt.show()
+# while diff < EPS : 
+#     #add new point  
+#     evaluated_f1_sp = f1(miu[:,0],samples[:,1])  
+#     evaluated_f2_sp = f2(samples[:,0],samples[:,1])
+#     res = np.stack((evaluated_f1_sp, evaluated_f2_sp), axis=1)
+#             #TODO recombination + selection 
+#     y = pareto_ranking(res)
+#     arg_v = np.argsort(y)[:MIU_SIZE]
+#     miu = res[arg_v]
+#     reference_point = init_dystopia(res[arg_v])
+#     front_size = len(samples) -  np.count_nonzero(y)  
+#     for q in front_size :  #calculte vol with and withotu each point 
+#         vol = hypervol(miu, front_size)
+
+# plt.scatter(evaluated_f1_sp[y > 0], evaluated_f2_sp[y > 0])  
+# plt.scatter(evaluated_f1_sp[y == 0], evaluated_f2_sp[y == 0], color='green')
+# plt.show()
 
 
 # path = os.path.join(os.getcwd(), 'DMA_q1.dat')
