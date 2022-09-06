@@ -33,7 +33,7 @@ class hypervol_solver():
     def build_front(self):
         y = self.pareto_ranking(self.y_vec)
         front_size = len(y) - np.count_nonzero(y)   
-        arg_v = np.argsort(y)[:front_size]
+        arg_v = np.argsort(y)[:min(front_size, MIU_SIZE)]
 
         miu_y = self.y_vec[arg_v]  
         miu_x = self.x_vec[arg_v]
@@ -42,6 +42,9 @@ class hypervol_solver():
         self.front[0] = np.copy(miu_x)
         self.front[1] = np.copy(miu_y)
         
+    def best_p(self):
+        return np.min(np.linalg.norm(self.front[1]))
+
     def iterate(self): 
         for pair in list (itr.combinations(self.front[0], 2)) :
            self.front[0] = np.append(self.front[0], self.recombine(pair[0],pair[1]).reshape(1,80), axis=0)
@@ -61,7 +64,7 @@ class hypervol_solver():
    
         diff = np.inf
         vol = 0
-        while (diff > EPS): #stop conditions TODO change 
+        while (self.best_p() > EPS): #stop conditions TODO change 
             vol_n = self.hypervol() #remove least contributor
             diff = vol_n - vol  #add new point, must remain undominated set
             vol = vol_n 
@@ -119,7 +122,16 @@ class hypervol_solver():
             volume *= val
         return abs(volume)
 
-    def recombine(self, p1,p2): 
+    def recombine(self, p1, p2):
+        index_1 = np.random.randint(0, len(p1))
+        index_2 = np.random.randint(0, len(p2))
+        if index_1 > index_2:
+            index_1, index_2 = index_2, index_1
+        child_1 =  np.concatenate((p2[:index_1], p1[index_1:index_2]))
+        child_2 =  np.concatenate((child_1, p2[index_2:]))
+        return child_2
+
+    def recsxombine(self, p1,p2): 
         offset = np.random.randint(1,p1.shape[0])
         mut = np.random.randint(0,p1.shape[0])
 
