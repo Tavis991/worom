@@ -5,7 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt 
 #from scipy.spatial import ConvexHull
 
-MIU_SIZE = 50 
+MIU_SIZE = 25 
+ITER_COUNT = 100
 EPS = 0.003
 U_BOUND = 2
 L_BOUND = -1
@@ -13,6 +14,7 @@ DIM = 80
 
 class hypervol_solver():
     def __init__(self, funcs):
+        self.counter = 0
         if len(funcs) > 3 or len(funcs) < 1 : 
             raise Exception('1-3 objective functions per solver')
         self.funcs = funcs
@@ -33,7 +35,7 @@ class hypervol_solver():
     def build_front(self):
         y = self.pareto_ranking(self.y_vec)
         front_size = len(y) - np.count_nonzero(y)   
-        arg_v = np.argsort(y)[:min(front_size, MIU_SIZE)]
+        arg_v = np.argsort(y)[:min(front_size, MIU_SIZE)] #to prevent population explosion 
 
         miu_y = self.y_vec[arg_v]  
         miu_x = self.x_vec[arg_v]
@@ -42,29 +44,22 @@ class hypervol_solver():
         self.front[0] = np.copy(miu_x)
         self.front[1] = np.copy(miu_y)
         
-    def best_p(self):
-        return np.min(np.linalg.norm(self.front[1]))
-
     def iterate(self): 
-        for pair in list (itr.combinations(self.front[0], 2)) :
-           self.front[0] = np.append(self.front[0], self.recombine(pair[0],pair[1]).reshape(1,80), axis=0)
+        while self.front[0].shape[0] < 100 :
+            for pair in list (itr.combinations(self.front[0], 2)) : #to prevent population extinction 
+                self.front[0] = np.append(self.front[0], self.recombine(pair[0],pair[1]).reshape(1,80), axis=0)
 
         self.y_vec = self.evaluation(self.front[0])
         self.x_vec = self.front[0]
         self.build_front()   
 
     def solve(self):
-        #plt.scatter(self.y_vec[:,0], self.y_vec[:,1])
-        #plt.scatter(self.front[1][:,0], self.front[1][:,1])
-
-        # while (len(self.front) < MIU_SIZE) : #we should remain only with front points 
-        #     self.iterate()
-
         self.build_front()
    
         diff = np.inf
         vol = 0
-        while (self.best_p() > EPS): #stop conditions TODO change 
+        while (self.best_point()[0] > EPS) and (self.counter < ITER_COUNT): #stop conditions TODO change 
+            self.counter += 1
             vol_n = self.hypervol() #remove least contributor
             diff = vol_n - vol  #add new point, must remain undominated set
             vol = vol_n 
@@ -96,14 +91,6 @@ class hypervol_solver():
             contributions = np.abs(differences[:-1, 0] * differences[1:, 1])
 
         return sum(contributions)
-        fig = plt.figure()
-        ax1 = fig.add_subplot(111)        
-        ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
-        ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
-        ax1.scatter(reference_point[0], reference_point[1], color = 'red')
-        plt.pause(1)
-        plt.show()
-
         # ax1.scatter(self.front[1][idexs[np.argmin(contributions)+1]][0], self.front[1][idexs[np.argmin(contributions)+1]][1], color='grey')
         # vols_inclus = []    
         # for p in front_by_y :
@@ -122,16 +109,7 @@ class hypervol_solver():
             volume *= val
         return abs(volume)
 
-    def recombine(self, p1, p2):
-        index_1 = np.random.randint(0, len(p1))
-        index_2 = np.random.randint(0, len(p2))
-        if index_1 > index_2:
-            index_1, index_2 = index_2, index_1
-        child_1 =  np.concatenate((p2[:index_1], p1[index_1:index_2]))
-        child_2 =  np.concatenate((child_1, p2[index_2:]))
-        return child_2
-
-    def recsxombine(self, p1,p2): 
+    def recombine(self, p1,p2): 
         offset = np.random.randint(1,p1.shape[0])
         mut = np.random.randint(0,p1.shape[0])
 
@@ -157,8 +135,11 @@ class hypervol_solver():
                     ranking[idx2] += 1 
         return ranking
 
-
-
+    def best_point(self):
+        y = self.front[1][np.argmin(np.linalg.norm(self.front[1], axis=1))]
+        x = self.front[0][np.argmin(np.linalg.norm(self.front[1], axis=1))]
+        p = np.min(np.linalg.norm(self.front[1], axis=1))
+        return p,y,x
 
 # solve for n = 80
 f1_1 = lambda x1 : np.dot(x1.T , x1) # minimize
@@ -179,8 +160,9 @@ funcs = [f1_1,f1_2]
 solver = hypervol_solver(funcs)
 front = solver.solve()
 
-print(front[1][np.argmin(np.linalg.norm(front[1]))])
-x = front[0][np.argmin(np.linalg.norm(front[1]))]
+print(front[1][np.argmin(np.linalg.norm(front[1], axis=1))])
+
+x = front[0][np.argmin(np.linalg.norm(front[1], axis=1))]
 # diff = solver.y_vec
 
 
