@@ -5,7 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt 
 #from scipy.spatial import ConvexHull
 
-MIU_SIZE = 50 
+MIU_SIZE = 20
+ITER_COUNT = 100
 EPS = 0.003
 U_BOUND = 2
 L_BOUND = -1
@@ -13,6 +14,7 @@ DIM = 80
 
 class hypervol_solver():
     def __init__(self, funcs):
+        self.counter = 0
         if len(funcs) > 3 or len(funcs) < 1 : 
             raise Exception('1-3 objective functions per solver')
         self.funcs = funcs
@@ -33,37 +35,43 @@ class hypervol_solver():
     def build_front(self):
         y = self.pareto_ranking(self.y_vec)
         front_size = len(y) - np.count_nonzero(y)   
-        arg_v = np.argsort(y)[:front_size]
+        arg_v = np.argsort(y)[:front_size] #min(front_size, MIU_SIZE)
 
         miu_y = self.y_vec[arg_v]  
         miu_x = self.x_vec[arg_v]
+        
+        # MIU_SIZE #to prevent population explosion  #DOES NOT TAKE INTO ACCCOUNT COVERAGE AREA HERE
+        if front_size > MIU_SIZE:
+            sorted_miu = np.linalg.norm(miu_y, axis=1)
+            min_inde = np.argsort(sorted_miu)[:MIU_SIZE] 
+            miu_y = miu_y[min_inde]
+            miu_x = miu_x[min_inde]
 
         self.front = [np.zeros((miu_x.shape)), np.zeros((miu_y.shape))]
         self.front[0] = np.copy(miu_x)
         self.front[1] = np.copy(miu_y)
         
     def iterate(self): 
-        for pair in list (itr.combinations(self.front[0], 2)) :
-           self.front[0] = np.append(self.front[0], self.recombine(pair[0],pair[1]).reshape(1,80), axis=0)
+        while self.front[0].shape[0] < 100 :
+            for pair in list (itr.combinations(self.front[0], 2)) : #to prevent population extinction 
+                self.front[0] = np.append(self.front[0], self.recombine(pair[0],pair[1]).reshape(1,80), axis=0)
 
         self.y_vec = self.evaluation(self.front[0])
         self.x_vec = self.front[0]
         self.build_front()   
 
     def solve(self):
-        #plt.scatter(self.y_vec[:,0], self.y_vec[:,1])
-        #plt.scatter(self.front[1][:,0], self.front[1][:,1])
-
-        # while (len(self.front) < MIU_SIZE) : #we should remain only with front points 
-        #     self.iterate()
-
         self.build_front()
    
         diff = np.inf
         vol = 0
-        while (diff > EPS): #stop conditions TODO change 
+        vols = []
+        while(self.counter < ITER_COUNT): # (diff > EPS) and  #stop conditions TODO change 
+            self.counter += 1
             vol_n = self.hypervol() #remove least contributor
+            vols.append(vol_n)
             diff = vol_n - vol  #add new point, must remain undominated set
+            
             vol = vol_n 
             self.iterate()
         return self.front
@@ -86,21 +94,20 @@ class hypervol_solver():
     
             idexs = front_by_y[:, 1].argsort()
             vols_by_y = front_by_y[idexs]
-            differences = np.diff(vols_by_y,axis = 0)
-            contributions = np.abs(differences[:-1, 0] * differences[1:, 1])
+            differences = np.diff(vols_by_y,axis = 0) #CAN GET RID OF EDGE HERE I THINK
+            contributions = np.abs(differences[:-1, 0] * differences[1:, 1]) #ןIS THIS RIGHT??
             self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
             self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
-            contributions = np.abs(differences[:-1, 0] * differences[1:, 1])
+            
+            #updating volume without lsp # technically only need to update two, but..
+            front_y_2 = np.copy(self.front[1])
+            idexs_2 = front_y_2[:, 1].argsort()
+            vols_y_2 = front_y_2[idexs_2]
+            differences_2 = np.diff(vols_y_2,axis = 0)
+            
+            contributions_2 = np.abs(differences_2[:-1, 0] * differences_2[1:, 1]) #NEED TO UPDATE DIFFFERNCES FOR THIS TO DO SOMETHING
 
-        return sum(contributions)
-        fig = plt.figure()
-        ax1 = fig.add_subplot(111)        
-        ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
-        ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
-        ax1.scatter(reference_point[0], reference_point[1], color = 'red')
-        plt.pause(1)
-        plt.show()
-
+        return sum(contributions_2)
         # ax1.scatter(self.front[1][idexs[np.argmin(contributions)+1]][0], self.front[1][idexs[np.argmin(contributions)+1]][1], color='grey')
         # vols_inclus = []    
         # for p in front_by_y :
@@ -124,7 +131,8 @@ class hypervol_solver():
         mut = np.random.randint(0,p1.shape[0])
 
         new_p = np.concatenate((p1[:offset],p2[offset:]),axis=0)
-        new_p[mut] = new_p[mut] * (1 + np.random.normal() * 0.01) #TODO boundry problems 
+        #new_p[mut] = new_p[mut] * (1 + np.random.normal() * 0.01) #TODO boundry problems 
+        new_p[mut] = np.random.normal(np.mean(p1), 0.2)
         return new_p
 
     def init_dystopia(self) : #any dimensional
@@ -145,8 +153,11 @@ class hypervol_solver():
                     ranking[idx2] += 1 
         return ranking
 
-
-
+    def best_point(self):
+        y = self.front[1][np.argmin(np.linalg.norm(self.front[1], axis=1))]
+        x = self.front[0][np.argmin(np.linalg.norm(self.front[1], axis=1))]
+        p = np.min(np.linalg.norm(self.front[1], axis=1))
+        return p,y,x
 
 # solve for n = 80
 f1_1 = lambda x1 : np.dot(x1.T , x1) # minimize
@@ -167,8 +178,9 @@ funcs = [f1_1,f1_2]
 solver = hypervol_solver(funcs)
 front = solver.solve()
 
-print(front[1][np.argmin(np.linalg.norm(front[1]))])
-x = front[0][np.argmin(np.linalg.norm(front[1]))]
+print(front[1][np.argmin(np.linalg.norm(front[1], axis=1))])
+
+x = front[0][np.argmin(np.linalg.norm(front[1], axis=1))]
 # diff = solver.y_vec
 
 
