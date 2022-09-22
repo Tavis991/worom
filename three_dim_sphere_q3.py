@@ -16,7 +16,7 @@ import pandas as pd
 from mpl_toolkits import mplot3d
 from mpl_toolkits.mplot3d import axes3d
 
-MIU_SIZE = 25
+MIU_SIZE = 15
 ITER_COUNT = 20
 EPS = 0.003
 U_BOUND = 4
@@ -74,8 +74,8 @@ class hypervol_solver():
             
         return self.front
     def differences(self, front_pair):
-        idexs = front_pair[:, 1].argsort()
-        vols_by_y = front_pair[idexs]
+        idexs = front_pair[1].argsort()
+        vols_by_y = front_pair[:, idexs]
         differences = np.diff(vols_by_y,axis = 0) #CAN GET RID OF EDGE HERE I THINK
         return differences
 
@@ -92,13 +92,16 @@ class hypervol_solver():
         plt.show()
         
         dim = reference_point.shape[0]#volume to be filled 
+        print(dim)
         #front_by_y = np.copy(self.front[1])
-      
+        combinations = [np.array([self.front[1][:,0], self.front[1][:,1]]), np.array([self.front[1][:,0], self.front[1][:,2]]), \
+            np.array([self.front[1][:,1], self.front[1][:,2]])]
+
         if dim == 3 : 
             while self.front_size > MIU_SIZE:
                 contributions = 1 
-                for a,b in[itr.combinations(self.front[0], 2)]:
-                    contributions *= np.abs(self.differences(a,b))
+                for pair in combinations:
+                    contributions *= np.abs(self.differences(pair))
                 self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
                 self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
                 self.front_size -= 1
