@@ -9,7 +9,8 @@ import itertools as itr
 #import pandas as pd 
 import numpy as np 
 #import os
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
+from matplotlib import cm 
 #from scipy.spatial import ConvexHull
 import pandas as pd
 from mpl_toolkits import mplot3d
@@ -72,14 +73,19 @@ class hypervol_solver():
             vol = vol_n 
             
         return self.front
+    def differences(self, front_pair):
+        idexs = front_pair[:, 1].argsort()
+        vols_by_y = front_pair[idexs]
+        differences = np.diff(vols_by_y,axis = 0) #CAN GET RID OF EDGE HERE I THINK
+        return differences
 
-    
     def hypervol (self):
         reference_point = self.init_dystopia()  #ref point is the worse x,y,(z) of all miu 
         
-        fig = plt.figure(figsize = (30, 17))
+        fig = plt.figure(figsize = (36, 27))
         ax1 = plt.axes(projection ="3d")
-        ax1.scatter3D(self.y_vec[:,0], self.y_vec[:,1],  self.y_vec[:,2], color='blue')
+        ax1.plot_surface(np.array([self.y_vec[:,0], self.y_vec[:,1]]), np.array([self.y_vec[:,0], self.y_vec[:,2]]), \
+            np.array([self.y_vec[:,1], self.y_vec[:,2]]), cmap=cm.coolwarm)
         ax1.scatter(self.front[1][:,0], self.front[1][:,1], self.front[1][:,2], color = 'yellow')
         ax1.scatter(reference_point[0], reference_point[1], reference_point[2], color = 'red')
         plt.pause(1)
@@ -88,7 +94,16 @@ class hypervol_solver():
         dim = reference_point.shape[0]#volume to be filled 
         #front_by_y = np.copy(self.front[1])
       
-        if dim == 2 :
+        if dim == 3 : 
+            while self.front_size > MIU_SIZE:
+                contributions = 1 
+                for a,b in[itr.combinations(self.front[0], 2)]:
+                    contributions *= np.abs(self.differences(a,b))
+                self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
+                self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
+                self.front_size -= 1
+                
+        elif dim == 2 :
             while self.front_size > MIU_SIZE:
                 front_by_y = np.copy(self.front[1])
                 idexs = front_by_y[:, 1].argsort()
