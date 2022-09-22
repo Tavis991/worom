@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 MIU_SIZE = 25
-ITER_COUNT = 100
+ITER_COUNT = 20
 EPS = 0.003
 U_BOUND = 100
 L_BOUND = 0
@@ -36,12 +36,6 @@ class hypervol_solver():
         #     self.x_vec[i][np.random.randint(0,19)] += (100 - sum(k3)[i]) # remainder 
         self.y_vec = self.evaluation(self.x_vec)
 
-        # evaluated_f1_sp = self.funcs[0](samples[:,0],samples[:,1]) #
-        # for f in funcs : 
-            
-        #     evaluated_f2_sp = self.funcs[1](samples[:,0],samples[:,1])  # implementation specific 
-
-        # res = np.stack((evaluated_f1_sp, evaluated_f2_sp), axis=1)
     
     def evaluation (self, x_vec):
         info = [self.covariance, self.returns] 
@@ -50,19 +44,10 @@ class hypervol_solver():
         return y_vec
 
     def build_front(self):
-        y = self.pareto_ranking(self.y_vec)
-        self.front_size = len(y) - np.count_nonzero(y)   
-        arg_v = np.argsort(y)[:self.front_size] #min(front_size, MIU_SIZE)
-
-        miu_y = self.y_vec[arg_v]  
-        miu_x = self.x_vec[arg_v]
-        
-        # MIU_SIZE #to prevent population explosion  #DOES NOT TAKE INTO ACCCOUNT COVERAGE AREA HERE
-        # if front_size > MIU_SIZE:
-        #     sorted_miu = np.linalg.norm(miu_y, axis=1)
-        #     min_inde = np.argsort(sorted_miu)[:MIU_SIZE] 
-        #     miu_y = miu_y[min_inde]
-        #     miu_x = miu_x[min_inde]
+        y = self.is_pareto_efficient_simple(self.y_vec)
+        self.front_size = sum(y)
+        miu_y = self.y_vec[y]  
+        miu_x = self.x_vec[y]
 
         self.front = [np.zeros((miu_x.shape)), np.zeros((miu_y.shape))]
         self.front[0] = np.copy(miu_x)
@@ -91,12 +76,13 @@ class hypervol_solver():
         vols = []
         while(self.counter < ITER_COUNT): # (diff > EPS) and  #stop conditions TODO change 
             self.counter += 1
+            self.iterate()
             vol_n = self.hypervol() #remove least contributor
             vols.append(vol_n)
             diff = vol_n - vol  #add new point, must remain undominated set
             
             vol = vol_n 
-            self.iterate()
+            
         return self.front
 
     def hypervol (self):
@@ -146,10 +132,9 @@ class hypervol_solver():
 
     def recombine(self, p1,p2): 
         offset = np.random.randint(1,p1.shape[0])
-        mut = np.random.randint(0,p1.shape[0])
+        mut = np.random.randint(0,p1.shape[0]) #maybe make this less now!
 
         new_p = np.concatenate((p1[:offset],p2[offset:]),axis=0)
-        #new_p[mut] = new_p[mut] * (1 + np.random.normal() * 0.01) #TODO boundry problems 
         new_p[mut] = np.random.normal(np.mean(p1), 0.2)
         return new_p
 
@@ -161,21 +146,19 @@ class hypervol_solver():
         for m in range(dim) :
             dystopia[m] = np.max(miu[:,m]) #CHANGED MIU TO Y_VEC
         return dystopia #DO I NEED TO MAKE A COPY OF Y_VEC?
-    def dominate(self, x1: np.array, x2: np.array):
-        return (x1 <= x2).all() and (x1 < x2).any()
 
-    def pareto_ranking(self, ObjFncVectors):
-        X = pd.DataFrame(ObjFncVectors)
-        return np.array([np.sum(X.T.apply(lambda x: self.dominate(x, X.T[i]), axis=0)) for i in range(X.shape[0])])
-    # def pareto_ranking(self, ObjFncVectors) :  #any dimensional
-    #     ranking = np.zeros(len(ObjFncVectors)) #WHY NOT JUST SELF.Y_VEC.shape[0]?? ""^
-
-    #     for idx in range(len(ObjFncVectors)): #dominating vec 
-    #         for idx2 in range(len(ObjFncVectors)): #dominated vec 
-    #             if np.all(ObjFncVectors[idx, :] <= ObjFncVectors[idx2, :]) \
-    #                 and np.any(ObjFncVectors[idx, :] < ObjFncVectors[idx2, :] ) :
-    #                 ranking[idx2] += 1 
-    #     return ranking
+    def is_pareto_efficient_simple(self, costs):
+        """
+        Find the pareto-efficient points
+        :param costs: An (n_points, n_costs) array
+        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        """
+        is_efficient = np.ones(costs.shape[0], dtype = bool)
+        for i, c in enumerate(costs):
+            if is_efficient[i]:
+                is_efficient[is_efficient] = np.any(costs[is_efficient]<c, axis=1)  # Keep any point with a lower cost
+                is_efficient[i] = True  # And keep self
+        return is_efficient
 
     def best_point(self):
         y = self.front[1][np.argmin(np.linalg.norm(self.front[1], axis=1))]
@@ -187,8 +170,6 @@ class hypervol_solver():
 f1_1 = lambda x1 : np.dot(x1.T , x1) # minimize
 f1_2 = lambda x1 : np.dot((x1-1).T, x1-1) # minimize
 
-# Q = covariance matrix nxn of portfolio investments       #given as input
-# rho = expected return on investment vect n               #given as input
 f2_risk = lambda x, Q : np.dot( np.dot(x.T,Q) , x) # minimize
 neg_f2_return = lambda x, rho: - (np.dot(x.T , rho)) #MAXIMIZE- minimize neg
 f2_B = lambda x : np.sum(x)
@@ -200,7 +181,7 @@ f3_3 = lambda x1 : np.dot((x1-2).T, x1-2) # minimize
 
 cov_parse = lambda row : [float(i) for i in row[2:-3].split(',')]
 
-df = pd.read_table('portfolio.dat') # ['Investments' , 'Return' , 'Covariance' , 'Wealth']
+df = pd.read_table('portfolio.dat') 
 returns = [float(i) for i in df.values[7][0].split('=')[1].split(';')[0][2:-2].split(',')] 
 covariance = [cov_parse(df.values[9+i][0]) for i in range(20)]
 wealth = int(df.values[30][0].split('=')[1].split(';')[0])
@@ -209,36 +190,7 @@ funcs = [f2_risk, neg_f2_return]
 solver = hypervol_solver(funcs, covariance, wealth, returns)
 front = solver.solve()
 
-
 print(front[1][np.argmin(np.linalg.norm(front[1], axis=1))])
-
+print(front)
 x = front[0][np.argmin(np.linalg.norm(front[1], axis=1))]
 
-
-# diff = solver.y_vec
-
-
-
-# while diff < EPS : 
-#     #add new point  
-#     evaluated_f1_sp = f1(miu[:,0],samples[:,1])  
-#     evaluated_f2_sp = f2(samples[:,0],samples[:,1])
-#     res = np.stack((evaluated_f1_sp, evaluated_f2_sp), axis=1)
-#             #TODO recombination + selection 
-#     y = pareto_ranking(res)
-#     arg_v = np.argsort(y)[:MIU_SIZE]
-#     miu = res[arg_v]
-#     reference_point = init_dystopia(res[arg_v])
-#     front_size = len(samples) -  np.count_nonzero(y)  
-#     for q in front_size :  #calculte vol with and withotu each point 
-#         vol = hypervol(miu, front_size)
-
-# plt.scatter(evaluated_f1_sp[y > 0], evaluated_f2_sp[y > 0])  
-# plt.scatter(evaluated_f1_sp[y == 0], evaluated_f2_sp[y == 0], color='green')
-# plt.show()
-
-
-# path = os.path.join(os.getcwd(), 'DMA_q1.dat')
-# file = open(path ,"w")
-# file.write(str([list(smp) for smp in samples]))
-# file.close()
