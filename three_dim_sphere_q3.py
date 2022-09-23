@@ -56,7 +56,6 @@ class hypervol_solver():
         self.x_vec = self.front[0]
         self.build_front()   
 
-
     def solve(self):
         self.build_front()
    
@@ -71,51 +70,59 @@ class hypervol_solver():
             diff = vol_n - vol  #add new point, must remain undominated set
             
             vol = vol_n 
-            
         return self.front
-    def differences(self, front_pair):
-        idexs = front_pair[1].argsort()
-        vols_by_y = front_pair[:, idexs]
-        differences = np.diff(vols_by_y,axis = 0) #CAN GET RID OF EDGE HERE I THINK
-        return differences
+
+    def contributions(self, front_pairs):
+        idexs = front_pairs[0][1].argsort()
+        vols_by_y = front_pairs[0][:, idexs]
+        differences_1 = np.diff(vols_by_y,axis = 1)#CAN GET RID OF EDGE HERE I THINK
+        differences_2 = np.diff(front_pairs[1][:, idexs], axis = 1)
+        differences_3 = np.diff(front_pairs[2][:, idexs], axis = 1)
+        contributions = np.abs(differences_1[0, :-1] * differences_2[1, 1:] * differences_3[0, 1:])  #ןIS THIS RIGHT??
+        vic = idexs[np.argmin(contributions)+1]
+        return contributions, vic
 
     def hypervol (self):
         reference_point = self.init_dystopia()  #ref point is the worse x,y,(z) of all miu 
         
         fig = plt.figure(figsize = (36, 27))
         ax1 = plt.axes(projection ="3d")
-        ax1.plot_surface(np.array([self.y_vec[:,0], self.y_vec[:,1]]), np.array([self.y_vec[:,0], self.y_vec[:,2]]), \
-            np.array([self.y_vec[:,1], self.y_vec[:,2]]), cmap=cm.coolwarm)
+        # ax1.plot_surface(np.array([self.y_vec[:,0], self.y_vec[:,1]]), np.array([self.y_vec[:,0], self.y_vec[:,2]]), \
+        #     np.array([self.y_vec[:,1], self.y_vec[:,2]]), cmap=cm.coolwarm)
+        ax1.scatter(self.y_vec[:, 0], self.y_vec[:, 1], self.y_vec[:, 2], color = 'blue') 
         ax1.scatter(self.front[1][:,0], self.front[1][:,1], self.front[1][:,2], color = 'yellow')
         ax1.scatter(reference_point[0], reference_point[1], reference_point[2], color = 'red')
         plt.pause(1)
         plt.show()
         
         dim = reference_point.shape[0]#volume to be filled 
-        print(dim)
-        #front_by_y = np.copy(self.front[1])
-        combinations = [np.array([self.front[1][:,0], self.front[1][:,1]]), np.array([self.front[1][:,0], self.front[1][:,2]]), \
-            np.array([self.front[1][:,1], self.front[1][:,2]])]
+
 
         if dim == 3 : 
             while self.front_size > MIU_SIZE:
-                contributions = 1 
-                for pair in combinations:
-                    contributions *= np.abs(self.differences(pair))
-                self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
-                self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
+                combinations = [np.array([self.front[1][:,0],
+                    self.front[1][:,1]]), np.array([self.front[1][:,0], self.front[1][:,2]]), \
+                   np.array([self.front[1][:,1], self.front[1][:,2]])]
+                contributions, vic = self.contributions(combinations)
+                self.front[1] = np.delete(self.front[1], vic, axis=0)
+                self.front[0] = np.delete(self.front[0], vic, axis=0)
                 self.front_size -= 1
+                ax1.scatter(self.y_vec[:, 0], self.y_vec[:, 1], self.y_vec[:, 2], color = 'blue') 
+                ax1.scatter(self.front[1][:,0], self.front[1][:,1], self.front[1][:,2], color = 'yellow')
+                ax1.scatter(reference_point[0], reference_point[1], reference_point[2], color = 'red')
+                plt.pause(1)
+                plt.show()
                 
-        elif dim == 2 :
-            while self.front_size > MIU_SIZE:
-                front_by_y = np.copy(self.front[1])
-                idexs = front_by_y[:, 1].argsort()
-                vols_by_y = front_by_y[idexs]
-                differences = np.diff(vols_by_y,axis = 0) #CAN GET RID OF EDGE HERE I THINK
-                contributions = np.abs(differences[:-1, 0] * differences[1:, 1]) #ןIS THIS RIGHT??
-                self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
-                self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
-                self.front_size -= 1
+        # elif dim == 2 :
+        #     while self.front_size > MIU_SIZE:
+        #         front_by_y = np.copy(self.front[1])
+        #         idexs = front_by_y[:, 1].argsort()
+        #         vols_by_y = front_by_y[idexs]
+        #         differences = np.diff(vols_by_y,axis = 0) #CAN GET RID OF EDGE HERE I THINK
+        #         contributions = np.abs(differences[:-1, 0] * differences[1:, 1]) #ןIS THIS RIGHT??
+        #         self.front[1] = np.delete(self.front[1], idexs[np.argmin(contributions)+1], axis=0)
+        #         self.front[0] = np.delete(self.front[0], idexs[np.argmin(contributions)+1], axis=0)
+        #         self.front_size -= 1
             #updating volume without lsp # technically only need to update two, but..
             front_y_2 = np.copy(self.front[1])
             idexs_2 = front_y_2[:, 1].argsort()
