@@ -51,13 +51,19 @@ class hypervol_solver():
         vols = []
         while(self.counter < ITER_COUNT):
             self.counter += 1
+            self.iterate() 
+
             vol_n = self.hypervol() #remove least contributors and return volume sum
             vols.append(vol_n)
             diff = vol_n - vol  #add new point, must remain undominated set
             
             vol = vol_n 
-            self.iterate() 
-        
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111)        
+        ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
+        ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
+        plt.pause(1)
+        plt.show()
         last_vol = self.hypervol()
         return self.front
 
@@ -83,13 +89,7 @@ class hypervol_solver():
             differences_2 = np.diff(vols_y_2,axis = 0)
             
                         
-            fig = plt.figure()
-            ax1 = fig.add_subplot(111)        
-            ax1.scatter(self.y_vec[:,0], self.y_vec[:,1], color='blue')
-            ax1.scatter(self.front[1][:,0], self.front[1][:,1], color = 'yellow')
-            ax1.scatter(reference_point[0], reference_point[1], color = 'red')
-            plt.pause(1)
-            plt.show()
+        
         
             contributions_2 = np.abs(differences_2[:-1, 0] * differences_2[1:, 1]) 
 
