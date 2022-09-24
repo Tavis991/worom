@@ -82,6 +82,8 @@ class hypervol_solver():
             
             vol = vol_n # to do add best point stuff here
             self.iterate() #add buncha points
+        
+        last_vol = self.hypervol()
         return self.front
 
     def hypervol (self):
@@ -204,6 +206,8 @@ front = solver.solve()
 print(front[1][np.argmin(np.linalg.norm(front[1], axis=1))])
 
 x = front[0][np.argmin(np.linalg.norm(front[1], axis=1))]
+
+
 # diff = solver.y_vec
 
 
